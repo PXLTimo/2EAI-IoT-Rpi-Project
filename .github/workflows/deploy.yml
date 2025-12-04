@@ -57,8 +57,8 @@ jobs:
           $sshDir = "$env:USERPROFILE\.ssh"
           if (!(Test-Path $sshDir)) { New-Item -ItemType Directory -Path $sshDir }
 
-          # Use --% to pass args literally to ssh-keyscan
-          ssh-keyscan --% -H $env:PI_HOST >> "$sshDir\known_hosts"
+          # Use the actual environment variable PI_HOST for ssh-keyscan
+          ssh-keyscan -H $env:PI_HOST >> "$sshDir\known_hosts"
         env:
           PI_HOST: ${{ secrets.PI_HOST }}
 
