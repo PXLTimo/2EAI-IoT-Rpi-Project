@@ -20,16 +20,7 @@ jobs:
       # --- Compile inside the container ---
       - name: Compile C code in container
         run: |
-          docker run --rm \
-  --mount type=bind,src="${{ github.workspace }}/pigpio",dst="/work" \
-  --mount type=bind,src="${{ github.workspace }}/.vscode",dst="/vscode" \
-  bramj \
-  bash -c "
-    cd /work
-    gcc -c pigpio/*.c
-    ar rcs libpigpio.a *.o
-    gcc main.c -L. -lpigpio -lpthread -o main
-  "
+docker run -it --rm --mount type=bind,src='C:\Users\Bram\Desktop\IoT Technology\pigpio',dst='/work' --mount type=bind,src='C:\Users\Bram\Desktop\.vscode',dst='/vscode' bramj
 
       # --- Extract executable from the container ---
       - name: Extract built executable
