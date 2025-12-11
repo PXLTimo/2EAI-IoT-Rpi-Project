@@ -52,17 +52,18 @@ jobs:
             "
 
       # 5️⃣ Add Raspberry Pi to known_hosts (Vereist dat PI_HOST is ingesteld!)
-      - name: Add Pi to known_hosts
+        - name: Add Pi to known_hosts
         shell: powershell
         run: |
           $sshDir = "$env:USERPROFILE\.ssh"
           if (!(Test-Path $sshDir)) { New-Item -ItemType Directory -Path $sshDir }
-          
-          # Use legacy KEX and algorithms to be compatible with older Pi
-          ssh-keyscan -t rsa $env:PI_HOST >> "$sshDir\known_hosts"
+      
+          # Ignore KEX error (stderr), still capture host key (stdout)
+          ssh-keyscan -t rsa $env:PI_HOST 2>$null | Out-File -Append "$sshDir\known_hosts"
+      
+          exit 0  # ensure step success even if ssh-keyscan prints errors
         env:
           PI_HOST: ${{ secrets.PI_HOST }}
-
 
 
 
