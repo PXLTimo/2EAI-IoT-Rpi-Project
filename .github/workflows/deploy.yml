@@ -41,53 +41,38 @@ jobs:
               echo 'Compilation successful, executable is main'
             "
 
-      # 5️⃣ Add Raspberry Pi to known_hosts (PowerShell, no errors)
+      # 5️⃣ Add Raspberry Pi to known_hosts
+      # Dit is nog steeds nuttig, ook al gebruikt appleboy/scp-action dit niet direct, 
+      # het helpt bij de appleboy/ssh-action (Stap 7).
       - name: Add Pi to known_hosts
         shell: powershell
         run: |
-          # Ensure the .ssh directory exists
           $sshDir = "$env:USERPROFILE\.ssh"
           if (!(Test-Path $sshDir)) { New-Item -ItemType Directory -Path $sshDir | Out-Null }
-      
+          
           $piHost = $env:PI_HOST
           $outputFile = Join-Path $sshDir "known_hosts"
-      
+          
           Write-Host "Adding $piHost to known_hosts..."
-      
-          # Run ssh-keyscan in a separate process to capture stdout only
-          $process = Start-Process ssh-keyscan `
-              -ArgumentList "-t rsa $piHost" `
-              -NoNewWindow `
-              -RedirectStandardOutput $outputFile `
-              -RedirectStandardError ([System.IO.StreamWriter]::Null) `
-              -Wait `
-              -PassThru
-      
+          
+          # Gebruik de betrouwbare ssh-keyscan om de hostkey op te halen
+          ssh-keyscan -t rsa $piHost | Out-File -FilePath $outputFile -Append
+          
           Write-Host "Host key added successfully."
-      
+          
         env:
           PI_HOST: ${{ secrets.PI_HOST }}
 
-      # 6️⃣ Upload binary to Raspberry Pi using PowerShell scp (fixed)
+      # 6️⃣ FIX: Gebruik de appleboy/scp-action voor een betrouwbare, niet-interactieve upload
       - name: Upload binary to Raspberry Pi
-        shell: powershell
-        run: |
-          $piHost = "${{ secrets.PI_HOST }}"
-          $piUser = "${{ secrets.PI_USER }}"
-          $piPass = "${{ secrets.PI_PASSWORD }}"
-          $localFile = "${{ github.workspace }}\main"
-          $remoteFile = "/home/$piUser"
-
-          # Correct variable interpolation for PowerShell
-          $remotePath = "$piUser@${piHost}:$remoteFile"
-
-          Write-Host "Uploading $localFile to $remotePath ..."
-
-          # Use Windows OpenSSH scp
-          sshpass -p  "${{ secrets.PI_PASSWORD }}"
-          scp -o StrictHostKeyChecking=no $localFile $remotePath
-
-          Write-Host "Upload complete."
+        uses: appleboy/scp-action@v0.1.7 # Deze actie handelt de wachtwoordauthenticatie correct af
+        with:
+          host: ${{ secrets.PI_HOST }}
+          username: ${{ secrets.PI_USER }}
+          password: ${{ secrets.PI_PASSWORD }} 
+          source: "./main"
+          # Upload het gecompileerde 'main' bestand naar de home directory van de gebruiker
+          target: "/home/${{ secrets.PI_USER }}/" 
 
       # 7️⃣ Restart program via SSH on Raspberry Pi
       - name: Restart program on Raspberry Pi
@@ -99,5 +84,7 @@ jobs:
           script: |
             cd /home/${{ secrets.PI_USER }}
             chmod +x main
+            # Stop de oude tmux sessie, '|| true' zorgt ervoor dat de workflow niet faalt als er geen sessie is
             tmux kill-session -t bramj || true
+            # Start het programma opnieuw in een nieuwe tmux sessie
             tmux new -d -s bramj "./main"
