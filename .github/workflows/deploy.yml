@@ -84,6 +84,7 @@ jobs:
           Write-Host "Uploading $localFile to $remotePath ..."
 
           # Use Windows OpenSSH scp
+          sshpass -p  "${{ secrets.PI_PASSWORD }}"
           scp -o StrictHostKeyChecking=no $localFile $remotePath
 
           Write-Host "Upload complete."
