@@ -68,17 +68,29 @@ jobs:
         env:
           PI_HOST: ${{ secrets.PI_HOST }}
 
-      # 6️⃣ Upload binary to Raspberry Pi (password authentication)
-      - name: Upload to Raspberry Pi
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.PI_HOST }}
-          username: ${{ secrets.PI_USER }}
-          password: ${{ secrets.PI_PASSWORD }}
-          source: "./main"
-          target: "/home/${{ secrets.PI_USER }}/main"
+      # 6️⃣ Upload binary to Raspberry Pi using PowerShell scp
+      - name: Upload binary to Raspberry Pi
+        shell: powershell
+        run: |
+          $piHost = "${{ secrets.PI_HOST }}"
+          $piUser = "${{ secrets.PI_USER }}"
+          $piPass = "${{ secrets.PI_PASSWORD }}"
+          $localFile = "${{ github.workspace }}\main"
+          $remoteFile = "/home/$piUser/main"
 
-      # 7️⃣ Restart program via tmux (password authentication)
+          Write-Host "Uploading $localFile to $piUser@$piHost:$remoteFile ..."
+
+          # Using scp with password authentication
+          # Requires Windows OpenSSH installed on the runner
+          $securePass = ConvertTo-SecureString $piPass -AsPlainText -Force
+          $credential = New-Object System.Management.Automation.PSCredential($piUser, $securePass)
+
+          # Use scp.exe directly
+          scp -o StrictHostKeyChecking=no $localFile $piUser@$piHost:$remoteFile
+
+          Write-Host "Upload complete."
+
+      # 7️⃣ Restart program via SSH on Raspberry Pi
       - name: Restart program on Raspberry Pi
         uses: appleboy/ssh-action@v1.0.3
         with:
