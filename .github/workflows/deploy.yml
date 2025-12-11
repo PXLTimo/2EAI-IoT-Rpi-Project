@@ -66,12 +66,10 @@ jobs:
         run: |
           $sshDir = Join-Path $env:USERPROFILE ".ssh"
           $keyPath = Join-Path $sshDir "id_rsa_bramj"
-
           $piHost = $env:PI_HOST
           $piUser = $env:PI_USER
           $localFile = Join-Path $env:GITHUB_WORKSPACE "main"
           $remoteFile = "/home/$piUser/main"
-
           $remotePath = "${piUser}@${piHost}:$remoteFile"
 
           Write-Host "Uploading $localFile to $remotePath ..."
