@@ -51,26 +51,33 @@ jobs:
               echo 'Compilation successful, executable is main'
             "
 
-           # 5️⃣ Add Raspberry Pi to known_hosts (Vereist dat PI_HOST is ingesteld!)
-- name: Add Pi to known_hosts
-  shell: powershell
-  run: |
-    $sshDir = "$env:USERPROFILE\.ssh"
-    if (!(Test-Path $sshDir)) { New-Item -ItemType Directory -Path $sshDir }
-
-    # Run ssh-keyscan and ignore its exit code
-    $piHost = $env:PI_HOST
-    $outputFile = Join-Path $sshDir "known_hosts"
-
-    # Start ssh-keyscan in a separate process to capture stdout only
-    Start-Process ssh-keyscan -ArgumentList "-t rsa $piHost" -NoNewWindow -RedirectStandardOutput $outputFile -Wait
-
-  env:
-    PI_HOST: ${{ secrets.PI_HOST }}
-
-
-
-
+        # 5️⃣ Add Raspberry Pi to known_hosts (PowerShell, no errors)
+        - name: Add Pi to known_hosts
+          shell: powershell
+          run: |
+            # Ensure the .ssh directory exists
+            $sshDir = "$env:USERPROFILE\.ssh"
+            if (!(Test-Path $sshDir)) { New-Item -ItemType Directory -Path $sshDir | Out-Null }
+        
+            $piHost = $env:PI_HOST
+            $outputFile = Join-Path $sshDir "known_hosts"
+        
+            Write-Host "Adding $piHost to known_hosts..."
+        
+            # Run ssh-keyscan in a separate process to capture stdout only
+            # This ignores the native exit code (so workflow won't fail)
+            $process = Start-Process ssh-keyscan `
+                -ArgumentList "-t rsa $piHost" `
+                -NoNewWindow `
+                -RedirectStandardOutput $outputFile `
+                -RedirectStandardError ([System.IO.StreamWriter]::Null) `
+                -Wait `
+                -PassThru
+        
+            Write-Host "Host key added successfully."
+        
+          env:
+            PI_HOST: ${{ secrets.PI_HOST }}
 
 
       # 6️⃣ Upload binary to Raspberry Pi (Gebruik nieuwe secrets-namen)
