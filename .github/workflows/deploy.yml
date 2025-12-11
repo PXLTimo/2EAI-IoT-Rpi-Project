@@ -15,80 +15,91 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2️⃣ Set up QEMU + Buildx (for cross-compiling)
+      # 2️⃣ Set up QEMU + Buildx (cross-compiling)
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-
+        
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 3️⃣ Build Docker image for ARM64 (Raspberry Pi)
+      # 3️⃣ Build Docker image (ARM64)
       - name: Build Docker image (ARM64)
         run: docker build -t bramj_builder --platform=linux/arm64 .
 
       # 4️⃣ Compile inside Docker
       - name: Compile inside Docker
         run: |
-          docker run --rm -v ${{ github.workspace }}:/work bramj_builder `
+          docker run --rm -v ${{ github.workspace }}:/work bramj_builder \
             bash -c "
               cd /work
               echo 'Start compiling...'
+              
               gcc -c pigpio/*.c -I/usr/include/pigpio
               ar rcs libpigpio.a *.o
               gcc main.c -L. -lpigpio -lpthread -o main
+              
               echo 'Compilation successful, executable is main'
             "
 
-      # 5️⃣ Setup SSH private key on Windows runner
-      - name: Setup SSH key
+      # 5️⃣ Configure SSH known_hosts with compatible KEX
+      - name: Add Pi to known_hosts
         shell: powershell
         run: |
           $sshDir = Join-Path $env:USERPROFILE ".ssh"
           if (-Not (Test-Path $sshDir)) { New-Item -ItemType Directory -Path $sshDir | Out-Null }
 
-          $keyPath = Join-Path $sshDir "id_rsa"
-          Set-Content -Path $keyPath -Value "${{ secrets.PI_PRIVATE_KEY }}" -NoNewline
-
-          # Restrict permissions like chmod 600
-          icacls $keyPath /inheritance:r /grant:r "$($env:USERNAME):(R)" | Out-Null
-
-      # 6️⃣ Add Raspberry Pi to known_hosts
-      - name: Add Pi to known_hosts
-        shell: powershell
-        run: |
-          $sshDir = Join-Path $env:USERPROFILE ".ssh"
           $knownHosts = Join-Path $sshDir "known_hosts"
           $piHost = "${{ secrets.PI_HOST }}"
 
-          ssh-keyscan -H $piHost | Out-File -FilePath $knownHosts -Append
+          Write-Host "Adding $piHost to known_hosts (ignoring KEX warnings)..."
 
-      # 7️⃣ Upload binary to Raspberry Pi using SCP
+          try {
+              ssh-keyscan `
+                -o KexAlgorithms=curve25519-sha256@libssh.org,ecdh-sha2-nistp256,diffie-hellman-group14-sha256 `
+                -o HostKeyAlgorithms=ssh-rsa,ssh-ed25519,ecdsa-sha2-nistp256 `
+                -H $piHost | Out-File -FilePath $knownHosts -Append
+          } catch {
+              Write-Host "Warning: ssh-keyscan failed with KEX warnings, ignoring..."
+          }
+
+          Write-Host "Host key added successfully."
+
+      # 6️⃣ Upload binary to Raspberry Pi using pscp (key-based)
       - name: Upload binary to Raspberry Pi
         shell: powershell
         run: |
-          $sshDir = Join-Path $env:USERPROFILE ".ssh"
-          $keyPath = Join-Path $sshDir "id_rsa"
           $piHost = "${{ secrets.PI_HOST }}"
           $piUser = "${{ secrets.PI_USER }}"
-          $localFile = Join-Path $env:GITHUB_WORKSPACE "main"
-          $remotePath = "/home/$piUser/main"
+          $localFile = "${{ github.workspace }}\main"
+          $remoteFile = "/home/$piUser/main"
+          $privateKey = "${{ secrets.PI_PRIVATE_KEY }}"  # Add your private key as GitHub secret
 
-          Write-Host "Uploading $localFile to $piUser@$piHost:$remotePath ..."
-          scp -i $keyPath -o StrictHostKeyChecking=yes $localFile "$piUser@$piHost:$remotePath"
+          $sshDir = Join-Path $env:USERPROFILE ".ssh"
+          $keyPath = Join-Path $sshDir "id_rsa_bramj"
+          Set-Content -Path $keyPath -Value $privateKey
+          icacls $keyPath /inheritance:r /grant:r "$env:USERNAME:F" /T
+          
+          Write-Host "Uploading $localFile to $piUser@$piHost:$remoteFile ..."
+
+          # Use pscp.exe from user profile (must be downloaded beforehand)
+          & "$env:USERPROFILE\pscp.exe" -i $keyPath -scp $localFile $piUser@$piHost:$remoteFile
+
           Write-Host "Upload complete."
 
-      # 8️⃣ Restart program via SSH on Raspberry Pi
+      # 7️⃣ Restart program via SSH (key-based)
       - name: Restart program on Raspberry Pi
         shell: powershell
         run: |
-          $sshDir = Join-Path $env:USERPROFILE ".ssh"
-          $keyPath = Join-Path $sshDir "id_rsa"
           $piHost = "${{ secrets.PI_HOST }}"
           $piUser = "${{ secrets.PI_USER }}"
+          $privateKey = "${{ secrets.PI_PRIVATE_KEY }}"
+          
+          $sshDir = Join-Path $env:USERPROFILE ".ssh"
+          $keyPath = Join-Path $sshDir "id_rsa_bramj"
+          Set-Content -Path $keyPath -Value $privateKey
+          icacls $keyPath /inheritance:r /grant:r "$env:USERNAME:F" /T
+          
+          Write-Host "Restarting program on Raspberry Pi..."
+          & "$env:USERPROFILE\ssh.exe" -i $keyPath $piUser@$piHost `
+            "cd /home/$piUser && chmod +x main && tmux kill-session -t bramj || true && tmux new -d -s bramj ./main"
 
-          ssh -i $keyPath -o StrictHostKeyChecking=yes "$piUser@$piHost" << 'EOF'
-          cd /home/$USER
-          chmod +x main
-          tmux kill-session -t bramj || true
-          tmux new -d -s bramj "./main"
-          EOF
