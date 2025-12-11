@@ -76,7 +76,7 @@ jobs:
           $piUser = "${{ secrets.PI_USER }}"
           $piPass = "${{ secrets.PI_PASSWORD }}"
           $localFile = "${{ github.workspace }}\main"
-          $remoteFile = "/home/$piUser/main"
+          $remoteFile = "/home/$piUser"
 
           # Correct variable interpolation for PowerShell
           $remotePath = "$piUser@${piHost}:$remoteFile"
