@@ -88,10 +88,18 @@ Dit project voldoet aan de volgende vereisten:
 
 * **Programmeertaal:** C (C11)
 * **Hardware:** Raspberry Pi
-* **GPIO libraries:**
+* **Gebruikte libraries:**
+1. **C libraries**
+   * `stdio.h`	(Voor standaard input/output (printf))
+   * `unistd.h`	(Voor tijdsfuncties zoals usleep())
+   * `time.h`	(Voor tijd-gerelateerde functies, zoals logging of delays)
+   * `pthread.h`	(Voor threading ondersteuning (wordt door pigpio gebruikt))
+2. GPIO / hardware libraries
+   * `pigpio.h` (digitale IO, knop, LED)
+   * `bcm2835.h` (hardware PWM voor servo)
+3. Build / system libraries
+   * `-lrt`  (Realtime timers (wordt gebruikt bij PWM timing en delays))
 
-  * `pigpio` (digitale IO, knop, LED)
-  * `bcm2835` (hardware PWM voor servo)
 * **Build tools:** GCC, CMake
 * **Containerisatie:** Docker + Buildx + QEMU
 * **CI/CD:** GitHub Actions
